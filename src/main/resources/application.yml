@@ -12,10 +12,9 @@ spring:
       api-key: "${OPENAI_API_KEY:}"
       base-url: https://api.xiaomimimo.com
       chat:
-        options:
-          model: mimo-v2.6-flash
-          temperature: 0.3
-          reasoning-effort: high
+        model: mimo-v2.6-flash
+        temperature: 0.3
+        reasoning-effort: high
     chat:
       client:
         enabled: false
@@ -35,7 +34,6 @@ logging:
     init:
       mode: always
       schema-locations: classpath:schema-chat-memory.sql
-
 
 
 

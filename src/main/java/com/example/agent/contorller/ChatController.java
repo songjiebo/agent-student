@@ -3,6 +3,7 @@ package com.example.agent.contorller;
 import com.example.agent.function.TestFunction;
 import jakarta.annotation.PostConstruct;
 import org.bsc.langgraph4j.GraphStateException;
+import org.bsc.langgraph4j.GraphInput;
 import org.bsc.langgraph4j.RunnableConfig;
 import org.bsc.langgraph4j.spring.ai.agentexecutor.AgentExecutor;
 import org.springframework.ai.chat.client.ChatClient;
@@ -55,7 +56,7 @@ public class ChatController {
 
     /**
      * 对话接口：将用户输入交给模型，并挂载 @Tool 标注的工具方法供模型调用。
-     * 注意：defaultTools 需要传入对象实例（Spring AI 1.1+ 不再支持 bean name 字符串注册）。
+     * defaultTools 传入 @Tool 对象实例，由 ChatClient 将工具挂载到本次模型调用。
      *
      * @param input 用户输入
      * @return 流式响应内容
@@ -67,7 +68,7 @@ public class ChatController {
 
     /**
      * Agent 接口：使用 LangGraph4j AgentExecutor 编排 Tool Calling 流程。
-     * 注意：langgraph4j 1.8.x 使用 Map 形式的 stream 重载（1.9 起废弃，但本项目锁定 1.8.x 与 Spring AI 1.1.2 兼容）。
+     * LangGraph4j 1.9 使用 GraphInput 封装初始状态。
      *
      * @param input 用户输入
      * @return Agent 执行结果文本
@@ -81,8 +82,8 @@ public class ChatController {
                 .build()
                 .compile();
 
-        // langgraph4j 1.8.x: messages 必须是 UserMessage 对象（不是 String），否则节点执行时会 ClassCastException
-        var result = agent.stream(Map.of("messages", new UserMessage(input)), RunnableConfig.builder().build());
+        // AgentExecutor 的 messages 状态需要 Spring AI Message 对象。
+        var result = agent.stream(GraphInput.args(Map.of("messages", new UserMessage(input))), RunnableConfig.empty());
 
         var finalState = result.stream()
                 .reduce((a, b) -> b)
