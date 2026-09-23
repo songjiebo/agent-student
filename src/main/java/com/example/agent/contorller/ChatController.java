@@ -1,10 +1,16 @@
 package com.example.agent.contorller;
 
 import com.example.agent.function.TestFunction;
+import jakarta.annotation.PostConstruct;
 import org.bsc.langgraph4j.GraphStateException;
 import org.bsc.langgraph4j.RunnableConfig;
 import org.bsc.langgraph4j.spring.ai.agentexecutor.AgentExecutor;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
+import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.memory.ChatMemoryRepository;
+import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
+import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,6 +34,25 @@ public class ChatController {
     @Autowired
     private TestFunction testFunction;
 
+
+    private ChatClient chatClient;
+
+
+    private String conversationId="123";
+
+    public ChatController() {
+
+    }
+
+    @PostConstruct
+    public void init(){
+        ChatMemory chatMemory=MessageWindowChatMemory.builder().chatMemoryRepository(new InMemoryChatMemoryRepository()).build();
+        chatClient = ChatClient.builder(openAiChatModel)
+                .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
+                .defaultTools(testFunction)
+                .build();
+    }
+
     /**
      * 对话接口：将用户输入交给模型，并挂载 @Tool 标注的工具方法供模型调用。
      * 注意：defaultTools 需要传入对象实例（Spring AI 1.1+ 不再支持 bean name 字符串注册）。
@@ -37,10 +62,7 @@ public class ChatController {
      */
     @GetMapping(value = "/chat", produces = "text/html;charset=utf-8")
     public Flux<String> chat(String input) {
-        ChatClient chatClient = ChatClient.builder(openAiChatModel)
-                .defaultTools(testFunction)
-                .build();
-        return chatClient.prompt(input).stream().content();
+        return chatClient.prompt(input).advisors(advisor -> advisor.param(ChatMemory.CONVERSATION_ID, conversationId)).stream().content();
     }
 
     /**
