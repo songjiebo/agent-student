@@ -9,7 +9,7 @@ spring:
     name: agent-student
   ai:
     openai:
-      api-key: "${OPENAI_API_KEY:sk-c2c5l5p5nj0h18o87kvqhqfpr03rzy0ichwu8mhszgr1d5os}"
+      api-key: "${OPENAI_API_KEY:}"
       base-url: https://api.xiaomimimo.com
       chat:
         options:
