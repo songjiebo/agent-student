@@ -1,0 +1,41 @@
+server:
+  servlet:
+    context-path: /agent
+  port: 8080
+
+
+spring:
+  application:
+    name: agent-student
+  ai:
+    openai:
+      api-key: "${OPENAI_API_KEY:sk-c2c5l5p5nj0h18o87kvqhqfpr03rzy0ichwu8mhszgr1d5os}"
+      base-url: https://api.xiaomimimo.com
+      chat:
+        options:
+          model: mimo-v2.6-flash
+          temperature: 0.3
+          reasoning-effort: high
+    chat:
+      client:
+        enabled: false
+
+logging:
+  level:
+    org.springframework.ai: DEBUG
+
+
+  # ==================== H2 内存数据库（会话记忆持久化） ====================
+  datasource:
+    url: jdbc:h2:mem:agent_chat_memory;MODE=LEGACY;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema-chat-memory.sql
+
+
+
+
