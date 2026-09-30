@@ -10,15 +10,39 @@ spring:
   ai:
     openai:
       api-key: "${OPENAI_API_KEY:}"
-      base-url: https://api.xiaomimimo.com
+      base-url: https://api.xiaomimimo.com/v1
       chat:
         model: mimo-v2.6-flash
         temperature: 0.3
         reasoning-effort: high
+      embedding:
+        model: qwen3.7-text-embedding
+        base-url: https://ws-lcxyjnbzvs71q5ma.cn-beijing.maas.aliyuncs.com/compatible-mode/v1
+        api-key: "${DASHSCOPE_API_KEY:}"
     chat:
       client:
         enabled: false
-
+    mcp:
+      client:
+        type: sync
+        enabled: true
+        streamable-http:
+          connections:
+            mcp-server:
+              url: http://localhost:8888
+    vectorstore:
+      milvus:
+        client:
+          host: "localhost"
+          port: 19530
+          username: "root"
+          password: "milvus"
+        databaseName: "default"
+        collectionName: "test_vector_store"
+        embeddingDimension: 1024
+        indexType: IVF_FLAT
+        metricType: COSINE
+        initialize-schema: true
 logging:
   level:
     org.springframework.ai: DEBUG

@@ -1,5 +1,6 @@
 package com.example.agent.contorller;
 
+import com.example.agent.advisors.CustomLogAdvisors;
 import com.example.agent.function.TestFunction;
 import jakarta.annotation.PostConstruct;
 import org.bsc.langgraph4j.GraphStateException;
@@ -8,18 +9,30 @@ import org.bsc.langgraph4j.RunnableConfig;
 import org.bsc.langgraph4j.spring.ai.agentexecutor.AgentExecutor;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
+import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
+import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
+import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.ChatMemoryRepository;
 import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.document.Document;
+import org.springframework.ai.embedding.Embedding;
+import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.embedding.EmbeddingResponse;
+import org.springframework.ai.mcp.SyncMcpToolCallbackProvider;
 import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
 
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -35,8 +48,16 @@ public class ChatController {
     @Autowired
     private TestFunction testFunction;
 
+    @Autowired
+    private SyncMcpToolCallbackProvider syncMcpToolCallbackProvider;
+
+    @Autowired
+    private VectorStore vectorStore;
 
     private ChatClient chatClient;
+
+    @Autowired
+    private  EmbeddingModel embeddingModel;
 
 
     private String conversationId="123";
@@ -49,9 +70,16 @@ public class ChatController {
     public void init(){
         ChatMemory chatMemory=MessageWindowChatMemory.builder().chatMemoryRepository(new InMemoryChatMemoryRepository()).build();
         chatClient = ChatClient.builder(openAiChatModel)
-                .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
-                .defaultTools(testFunction)
+                .defaultAdvisors(SimpleLoggerAdvisor.builder().build(), ToolCallingAdvisor.builder().build(), QuestionAnswerAdvisor.builder(vectorStore).build(),MessageChatMemoryAdvisor.builder(chatMemory).build())
                 .build();
+
+    }
+
+    @GetMapping("/embedding")
+    public String embedding(@RequestParam(value = "message" ) String message){
+        //EmbeddingResponse embeddingResponse = this.embeddingModel.embedForResponse(List.of(message));
+        vectorStore.add(Arrays.asList(new Document(message)));
+        return "ok";
     }
 
     /**
@@ -63,7 +91,11 @@ public class ChatController {
      */
     @GetMapping(value = "/chat", produces = "text/html;charset=utf-8")
     public Flux<String> chat(String input) {
-        return chatClient.prompt(input).advisors(advisor -> advisor.param(ChatMemory.CONVERSATION_ID, conversationId)).stream().content();
+        return chatClient.prompt(input).system("用户询问天气时，必须使用MCP工具去实时查询")
+                .advisors(advisor -> advisor.param(ChatMemory.CONVERSATION_ID, conversationId))
+                .tools(syncMcpToolCallbackProvider)
+                .stream()
+                .content();
     }
 
     /**
