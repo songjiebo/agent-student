@@ -7,6 +7,16 @@ server:
 spring:
   application:
     name: agent-student
+  # ==================== H2 内存数据库（会话记忆持久化） ====================
+  datasource:
+    url: jdbc:h2:mem:agent_chat_memory;MODE=LEGACY;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema-chat-memory.sql
   ai:
     openai:
       api-key: "${OPENAI_API_KEY:}"
@@ -46,18 +56,4 @@ spring:
 logging:
   level:
     org.springframework.ai: DEBUG
-
-
-  # ==================== H2 内存数据库（会话记忆持久化） ====================
-  datasource:
-    url: jdbc:h2:mem:agent_chat_memory;MODE=LEGACY;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE
-    driver-class-name: org.h2.Driver
-    username: sa
-    password: ""
-  sql:
-    init:
-      mode: always
-      schema-locations: classpath:schema-chat-memory.sql
-
-
 
