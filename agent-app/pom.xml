@@ -72,6 +72,23 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-jdbc</artifactId>
         </dependency>
+        <!-- PDF 解析：直接使用 PDFBox 3.x（版本与 spring-ai-pdf-document-reader 2.0.1 的传递依赖保持一致） -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>3.0.7</version>
+        </dependency>
+        <!-- OCR（纯 Java）：RapidOCR JNI 核心 + PP-OCRv4 中文模型（模型随依赖分发，免手工下载） -->
+        <dependency>
+            <groupId>io.github.mymonstercat</groupId>
+            <artifactId>rapidocr</artifactId>
+            <version>0.0.7</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.mymonstercat</groupId>
+            <artifactId>rapidocr-onnx-models</artifactId>
+            <version>1.2.2</version>
+        </dependency>
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
@@ -94,4 +111,77 @@
             </plugin>
         </plugins>
     </build>
+
+    <!--
+        RapidOCR 原生库按操作系统选择（JNI + onnxruntime）。
+        注意：Maven 只会激活"当前构建项目"的 profile，不会激活依赖 POM 中的 profile，
+        因此平台包必须在业务模块内显式声明，这也是 rapidocr-java 官方推荐的接入方式。
+        生产环境按目标部署平台打包（CI 矩阵构建），不要把所有平台包都塞进一个 jar。
+    -->
+    <profiles>
+        <profile>
+            <id>rapidocr-mac-arm64</id>
+            <activation>
+                <os>
+                    <family>mac</family>
+                    <arch>aarch64</arch>
+                </os>
+            </activation>
+            <dependencies>
+                <dependency>
+                    <groupId>io.github.mymonstercat</groupId>
+                    <artifactId>rapidocr-onnx-macosx-arm64</artifactId>
+                    <version>1.2.2</version>
+                </dependency>
+            </dependencies>
+        </profile>
+        <profile>
+            <id>rapidocr-mac-x86_64</id>
+            <activation>
+                <os>
+                    <family>mac</family>
+                    <arch>x86_64</arch>
+                </os>
+            </activation>
+            <dependencies>
+                <dependency>
+                    <groupId>io.github.mymonstercat</groupId>
+                    <artifactId>rapidocr-onnx-macosx-x86_64</artifactId>
+                    <version>1.2.2</version>
+                </dependency>
+            </dependencies>
+        </profile>
+        <profile>
+            <id>rapidocr-linux-x86_64</id>
+            <activation>
+                <os>
+                    <family>unix</family>
+                    <arch>amd64</arch>
+                </os>
+            </activation>
+            <dependencies>
+                <dependency>
+                    <groupId>io.github.mymonstercat</groupId>
+                    <artifactId>rapidocr-onnx-linux-x86_64</artifactId>
+                    <version>1.2.2</version>
+                </dependency>
+            </dependencies>
+        </profile>
+        <profile>
+            <id>rapidocr-windows-x86_64</id>
+            <activation>
+                <os>
+                    <family>windows</family>
+                    <arch>amd64</arch>
+                </os>
+            </activation>
+            <dependencies>
+                <dependency>
+                    <groupId>io.github.mymonstercat</groupId>
+                    <artifactId>rapidocr-onnx-windows-x86_64</artifactId>
+                    <version>1.2.2</version>
+                </dependency>
+            </dependencies>
+        </profile>
+    </profiles>
 </project>

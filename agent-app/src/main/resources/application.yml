@@ -16,7 +16,7 @@ spring:
   sql:
     init:
       mode: always
-      schema-locations: classpath:schema-chat-memory.sql
+      schema-locations: classpath:schema-chat-memory.sql,classpath:schema-ingest-task.sql
   ai:
     openai:
       api-key: "${OPENAI_API_KEY:}"
@@ -28,7 +28,7 @@ spring:
       embedding:
         model: qwen3.7-text-embedding
         base-url: https://ws-lcxyjnbzvs71q5ma.cn-beijing.maas.aliyuncs.com/compatible-mode/v1
-        api-key: "${DASHSCOPE_API_KEY:}"
+        api-key: "${ALI_API_KEY:}"
     chat:
       client:
         enabled: false
@@ -53,6 +53,40 @@ spring:
         indexType: IVF_FLAT
         metricType: COSINE
         initialize-schema: true
+
+# ==================== PDF 抽取/入库流水线 ====================
+agent:
+  ingest:
+    storage-dir: ./data/ingest          # 上传文件落盘目录（生产建议对象存储）
+    pipeline-version: v1                # 解析/切分算法版本，算法升级后可按版本批量重刷
+    limits:
+      max-file-bytes: 52428800          # 50MB，防资源耗尽
+      max-pages: 1000                   # 页数上限（PDF 炸弹防护之一）
+    quality:                            # 解析质量评分阈值（驱动策略降级链）
+      accept-score: 0.60                # 达标即采用该策略结果
+      need-review-score: 0.40           # 低于此值：入库但标记 NEED_REVIEW
+      min-chars-per-page: 50            # 低于此值视为无文本层（扫描件特征）
+    chunk:
+      min-child-chars: 200              # 子 chunk 目标下限（检索粒度）
+      max-child-chars: 800              # 子 chunk 目标上限
+      max-parent-chars: 4000            # 父 chunk（返回给 LLM 的上下文）上限
+    ocr:
+      enabled: true
+      dpi: 200                          # 页面栅格化精度（识别率/耗时平衡点）
+    mineru:                             # MinerU 4.x 自托管 V1 API（复杂版式兜底）
+      enabled: false                    # 未部署 MinerU 服务时保持关闭
+      base-url: http://127.0.0.1:8000   # mineru-kit api-server --host 127.0.0.1 --port 8000 --tier standard
+      api-key: "${MINERU_API_KEY:}"
+      tier: standard
+      output-formats: markdown
+      poll-interval-ms: 2000
+      max-polls: 300
+      connect-timeout-ms: 5000
+      read-timeout-ms: 120000
+    embed:
+      batch-size: 32                    # embedding 批大小（受 DashScope QPM 限制）
+      max-retries: 3
+      initial-backoff-ms: 500           # 指数退避基数
 logging:
   level:
     org.springframework.ai: DEBUG
