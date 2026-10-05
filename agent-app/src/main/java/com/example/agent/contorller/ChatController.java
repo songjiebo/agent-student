@@ -86,9 +86,9 @@ public class ChatController {
      */
     @GetMapping(value = "/chat", produces = "text/html;charset=utf-8")
     public Flux<String> chat(String input) {
-        return chatClient.prompt(input).system("用户询问天气时，必须使用MCP工具去实时查询")
+        return chatClient.prompt(input)//.system("用户询问天气时，必须使用MCP工具去实时查询")
                 .advisors(advisor -> advisor.param(ChatMemory.CONVERSATION_ID, conversationId))
-                .tools(syncMcpToolCallbackProvider)
+             //   .tools(syncMcpToolCallbackProvider)
                 .stream()
                 .content();
     }

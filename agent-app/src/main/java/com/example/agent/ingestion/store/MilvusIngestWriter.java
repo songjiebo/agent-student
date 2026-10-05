@@ -3,6 +3,9 @@ package com.example.agent.ingestion.store;
 import com.example.agent.ingestion.config.AgentIngestProperties;
 import com.example.agent.ingestion.model.Chunk;
 import com.example.agent.ingestion.model.ChunkRole;
+import com.openai.errors.OpenAIIoException;
+import com.openai.errors.OpenAIServiceException;
+import com.openai.errors.OpenAIRetryableException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
@@ -71,19 +74,24 @@ public class MilvusIngestWriter {
 
     /**
      * 删除文档全部向量（重刷前置 + 文档删除）。
+     * 失败统一包装为 {@link IngestWriteException}，保证任务错误信息口径一致。
      *
      * @param docId 文档 ID
      */
     public void deleteByDocId(String docId) {
-        vectorStore.delete(new Filter.Expression(
-                Filter.ExpressionType.EQ,
-                new Filter.Key(META_DOC_ID),
-                new Filter.Value(docId)));
+        try {
+            vectorStore.delete(new Filter.Expression(
+                    Filter.ExpressionType.EQ,
+                    new Filter.Key(META_DOC_ID),
+                    new Filter.Value(docId)));
+        } catch (RuntimeException e) {
+            throw new IngestWriteException("向量删除失败: " + brief(e), e);
+        }
         log.info("已清理文档旧向量: docId={}", docId);
     }
 
     /**
-     * 分批写入：批大小受 embedding 服务 QPM 约束；批内失败按指数退避重试。
+     * 分批写入：批大小受 embedding 服务单次条数上限约束；批内失败按指数退避重试。
      */
     private void writeInBatches(List<Document> documents) {
         int batchSize = properties.getEmbed().getBatchSize();
@@ -96,7 +104,9 @@ public class MilvusIngestWriter {
     }
 
     /**
-     * 单批写入 + 指数退避重试：embedding 服务限流/抖动的常规容错。
+     * 单批写入重试。
+     * 关键语义：只有"可重试错误"（网络/超时/限流/5xx）才退避重试；
+     * 参数类错误（400/401/404 等）是确定性失败，立即失败并透出根因，不做无意义重试。
      */
     private void addWithRetry(List<Document> batch) {
         int maxRetries = properties.getEmbed().getMaxRetries();
@@ -108,7 +118,11 @@ public class MilvusIngestWriter {
                 return;
             } catch (RuntimeException e) {
                 last = e;
-                log.warn("向量写入失败（第 {}/{} 次），{}ms 后重试: {}", attempt, maxRetries, backoff, e.getMessage());
+                if (!isRetryable(e)) {
+                    // 不可重试：快速失败，让问题立刻暴露（如批量超限、密钥错误）
+                    throw new IngestWriteException("向量写入遇到不可重试错误: " + brief(e), e);
+                }
+                log.warn("向量写入失败（第 {}/{} 次），{}ms 后重试: {}", attempt, maxRetries, backoff, brief(e));
                 try {
                     Thread.sleep(backoff);
                 } catch (InterruptedException ie) {
@@ -118,7 +132,48 @@ public class MilvusIngestWriter {
                 backoff *= 2;
             }
         }
-        throw new IngestWriteException("向量写入重试耗尽: " + last.getMessage(), last);
+        throw new IngestWriteException("向量写入重试耗尽: " + brief(last), last);
+    }
+
+    /**
+     * 可重试性判定（遍历 cause 链）：
+     * <ul>
+     *   <li>可重试：OpenAI SDK 显式标记的瞬态异常 / IO 网络异常 / 限流(429) / 服务端错误(5xx)；</li>
+     *   <li>不可重试：其余服务端返回的确定性错误（400 参数错误、401 鉴权失败等），默认快速失败。</li>
+     * </ul>
+     * 宁可少重试也不空转：确定性错误重试多少次结果都一样，只会拖慢失败反馈并放大故障。
+     */
+    private boolean isRetryable(Throwable error) {
+        for (Throwable t = error; t != null; t = t.getCause()) {
+            // SDK 显式瞬态异常 + 网络 IO 级异常
+            if (t instanceof OpenAIRetryableException || t instanceof OpenAIIoException
+                    || t instanceof org.springframework.web.client.ResourceAccessException
+                    || t instanceof java.io.InterruptedIOException
+                    || t instanceof java.net.ConnectException) {
+                return true;
+            }
+            // HTTP 状态类异常：仅限流与服务端错误可重试
+            if (t instanceof OpenAIServiceException serviceException) {
+                int status = serviceException.statusCode();
+                return status == 429 || status >= 500;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 异常摘要：根因类名 + （HTTP 状态码）+ 消息，便于任务错误信息直接定位问题（无需翻堆栈）。
+     * 状态码显式输出而非依赖异常消息文本——消息格式由 SDK 决定，不稳定。
+     */
+    private String brief(Throwable error) {
+        if (error == null) {
+            return "unknown";
+        }
+        if (error instanceof OpenAIServiceException serviceException) {
+            return error.getClass().getSimpleName() + "(status=" + serviceException.statusCode()
+                    + "): " + error.getMessage();
+        }
+        return error.getClass().getSimpleName() + ": " + error.getMessage();
     }
 
     /**

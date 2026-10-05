@@ -66,7 +66,8 @@ mineru-kit api-server --host 127.0.0.1 --port 8000 --tier standard
 | `chunk.max-parent-chars` | 4000 | LLM 上下文回填粒度 |
 | `ocr.dpi` | 200 | 页面栅格化精度（识别率/耗时平衡） |
 | `mineru.enabled` | false | 未部署 MinerU 服务时保持关闭 |
-| `embed.batch-size` | 32 | 批量写入大小（受 DashScope QPM 约束） |
+| `embed.batch-size` | 20 | embedding 单请求条数（**硬上限：DashScope 兼容模式 ≤ 20，超限直接 400**） |
+| `embed.max-retries` | 3 | 仅对可重试错误生效（网络/超时/429/5xx）；参数类错误快速失败不重试 |
 
 ## 五、部署要点
 
@@ -107,6 +108,7 @@ curl http://localhost:8080/agent/ingest/metrics
 | `LayoutAwareChunkerTest` | 父子结构、chunkId 确定性、表格整块保留、超长表格重复表头、长度约束 |
 | `TextLayerPdfParserTest` | PDFBox 现场生成 PDF 端到端解析、字号保留、扫描件画像跳过 |
 | `IngestTaskRepositoryTest` | 真实 schema 建表、判重、错误截断、重试计数、文档级删除 |
+| `MilvusIngestWriterTest` | 批大小切分、400 参数错误快速失败、超时退避重试、429/5xx 可重试、瞬态恢复 |
 
 ## 八、已知限制与后续（P2+）
 

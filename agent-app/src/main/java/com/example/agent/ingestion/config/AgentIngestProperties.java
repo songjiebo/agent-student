@@ -111,9 +111,13 @@ public class AgentIngestProperties {
     @Getter
     @Setter
     public static class Embed {
-        /** 每批写入 Milvus 的 chunk 数（受 embedding 服务 QPM 约束） */
-        private int batchSize = 32;
-        /** 单批最大重试次数 */
+        /**
+         * 每批写入 Milvus 的 chunk 数。
+         * 硬约束：embedding 服务单次请求的 input 条数上限（DashScope 兼容模式为 20），
+         * 超限直接 400（确定性失败，无重试价值），默认值必须 ≤ 服务端上限。
+         */
+        private int batchSize = 20;
+        /** 单批最大重试次数（仅对可重试错误生效，见 MilvusIngestWriter#isRetryable） */
         private int maxRetries = 3;
         /** 重试指数退避基数（毫秒） */
         private long initialBackoffMs = 500;

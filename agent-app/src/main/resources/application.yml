@@ -84,7 +84,7 @@ agent:
       connect-timeout-ms: 5000
       read-timeout-ms: 120000
     embed:
-      batch-size: 32                    # embedding 批大小（受 DashScope QPM 限制）
+      batch-size: 20                    # embedding 单请求条数上限（DashScope 兼容模式 ≤20，超限 400）
       max-retries: 3
       initial-backoff-ms: 500           # 指数退避基数
 logging:
