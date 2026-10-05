@@ -1,10 +1,9 @@
 package com.example.agent.contorller;
 
-import com.example.agent.advisors.CustomLogAdvisors;
 import com.example.agent.function.TestFunction;
 import jakarta.annotation.PostConstruct;
-import org.bsc.langgraph4j.GraphStateException;
 import org.bsc.langgraph4j.GraphInput;
+import org.bsc.langgraph4j.GraphStateException;
 import org.bsc.langgraph4j.RunnableConfig;
 import org.bsc.langgraph4j.spring.ai.agentexecutor.AgentExecutor;
 import org.springframework.ai.chat.client.ChatClient;
@@ -13,14 +12,11 @@ import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
 import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
 import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.chat.memory.ChatMemoryRepository;
 import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.document.Document;
-import org.springframework.ai.embedding.Embedding;
 import org.springframework.ai.embedding.EmbeddingModel;
-import org.springframework.ai.embedding.EmbeddingResponse;
 import org.springframework.ai.mcp.SyncMcpToolCallbackProvider;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.vectorstore.VectorStore;
@@ -32,7 +28,6 @@ import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
 
 import java.util.Arrays;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -48,7 +43,7 @@ public class ChatController {
     @Autowired
     private TestFunction testFunction;
 
-    @Autowired
+    ///@Autowired
     private SyncMcpToolCallbackProvider syncMcpToolCallbackProvider;
 
     @Autowired

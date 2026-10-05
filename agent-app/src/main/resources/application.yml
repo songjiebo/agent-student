@@ -35,7 +35,7 @@ spring:
     mcp:
       client:
         type: sync
-        enabled: true
+        enabled: false
         streamable-http:
           connections:
             mcp-server:
