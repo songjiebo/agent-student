@@ -17,7 +17,7 @@ import lombok.Getter;
 @Builder
 public class Chunk {
 
-    /** 确定性 chunkId：{docId}#p{父序号}c{子序号}（父 chunk 子序号为 0） */
+    /** 确定性 chunkId：sha256(docId#p{父序号}c{子序号}) 前 32 位十六进制（父 chunk 子序号为 0，≤36 满足 Milvus 主键限制） */
     private String chunkId;
 
     /** 所属父 chunkId；父 chunk 自身为 null */

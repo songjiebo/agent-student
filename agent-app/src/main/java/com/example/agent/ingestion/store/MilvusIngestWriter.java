@@ -136,12 +136,13 @@ public class MilvusIngestWriter {
     }
 
     /**
-     * 可重试性判定（遍历 cause 链）：
+     * 可重试性判定（遍历 cause 链）——"除非证明是永久性错误，否则有界重试"：
      * <ul>
-     *   <li>可重试：OpenAI SDK 显式标记的瞬态异常 / IO 网络异常 / 限流(429) / 服务端错误(5xx)；</li>
-     *   <li>不可重试：其余服务端返回的确定性错误（400 参数错误、401 鉴权失败等），默认快速失败。</li>
+     *   <li>快速失败：HTTP 4xx 确定性错误（参数/鉴权/未找到等，429 除外）；</li>
+     *   <li>可重试：SDK 瞬态异常 / 网络 IO / 限流(429) / 服务端错误(5xx) / 其余未知异常。</li>
      * </ul>
-     * 宁可少重试也不空转：确定性错误重试多少次结果都一样，只会拖慢失败反馈并放大故障。
+     * 未知异常默认重试的理由：向量库/网络层的抖动常见（gRPC reset、瞬时不可达），
+     * 且重试有上限（maxRetries）、写入幂等，代价可控；而把抖动当永久错误会直接杀死入库任务。
      */
     private boolean isRetryable(Throwable error) {
         for (Throwable t = error; t != null; t = t.getCause()) {
@@ -152,28 +153,41 @@ public class MilvusIngestWriter {
                     || t instanceof java.net.ConnectException) {
                 return true;
             }
-            // HTTP 状态类异常：仅限流与服务端错误可重试
+            // HTTP 状态类异常：4xx 确定性错误快速失败，429/5xx 可重试
             if (t instanceof OpenAIServiceException serviceException) {
                 int status = serviceException.statusCode();
                 return status == 429 || status >= 500;
             }
         }
-        return false;
+        // 未知异常（如 Milvus 客户端包装的插入失败）：有界重试兜底瞬时抖动
+        return true;
     }
 
     /**
-     * 异常摘要：根因类名 + （HTTP 状态码）+ 消息，便于任务错误信息直接定位问题（无需翻堆栈）。
-     * 状态码显式输出而非依赖异常消息文本——消息格式由 SDK 决定，不稳定。
+     * 异常摘要：输出完整 cause 链（类名 + HTTP 状态码 + 消息）。
+     * 必须打全链条——很多底层异常（如 Milvus 的 "Failed to insert:"）根因挂在 cause 上，
+     * 只打最外层会把真正的错误吞掉，导致无法定位。
      */
     private String brief(Throwable error) {
         if (error == null) {
             return "unknown";
         }
-        if (error instanceof OpenAIServiceException serviceException) {
-            return error.getClass().getSimpleName() + "(status=" + serviceException.statusCode()
-                    + "): " + error.getMessage();
+        StringBuilder sb = new StringBuilder();
+        Throwable current = error;
+        int depth = 0;
+        while (current != null && depth < 5) {
+            if (depth > 0) {
+                sb.append(" <- ");
+            }
+            sb.append(current.getClass().getSimpleName());
+            if (current instanceof OpenAIServiceException serviceException) {
+                sb.append("(status=").append(serviceException.statusCode()).append(')');
+            }
+            sb.append(": ").append(current.getMessage());
+            current = current.getCause() == current ? null : current.getCause();
+            depth++;
         }
-        return error.getClass().getSimpleName() + ": " + error.getMessage();
+        return sb.toString();
     }
 
     /**

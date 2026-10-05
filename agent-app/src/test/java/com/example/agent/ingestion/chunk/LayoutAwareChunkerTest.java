@@ -78,6 +78,25 @@ class LayoutAwareChunkerTest {
     }
 
     @Test
+    @DisplayName("chunkId 长度不超过 Milvus 主键 VARCHAR(36) 限制（超长会导致插入被拒）")
+    void keepsChunkIdWithinPrimaryKeyLimit() {
+        // docId 为 36 位 UUID 时最容易超限，用满长 docId 验证
+        String longDocId = "46a33d67-8c64-35a6-a58d-7a7ca1147fed";
+        List<DocBlock> blocks = new ArrayList<>();
+        for (int i = 0; i < 30; i++) {
+            blocks.add(paragraph("第" + i + "段内容用于生成足够多的父子 chunk，验证 chunkId 长度约束。"));
+        }
+        List<Chunk> chunks = chunker.chunk(longDocId, List.of(section(List.of("约束验证"), blocks)));
+        for (Chunk chunk : chunks) {
+            assertTrue(chunk.getChunkId().length() <= 36,
+                    "chunkId 超过 36 字符会导致 Milvus 插入失败: " + chunk.getChunkId());
+            if (chunk.getParentChunkId() != null) {
+                assertTrue(chunk.getParentChunkId().length() <= 36);
+            }
+        }
+    }
+
+    @Test
     @DisplayName("超长表格切分后每个片段重复表头，列结构不丢失")
     void splitsOversizedTableWithHeader() {
         StringBuilder table = new StringBuilder("| 项目 | 金额 |\n| --- | --- |\n");

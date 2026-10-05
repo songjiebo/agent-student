@@ -28,7 +28,7 @@ POST /agent/ingest/documents（秒回 taskId）
 |---|---|
 | 策略链 + 质量评分降级 | 廉价解析器覆盖多数文档，贵的解析只花在被评分筛出的文档上；宁可显式 NEED_REVIEW，绝不静默入库垃圾 |
 | 父子 chunk | 子 chunk 小而准负责检索命中，父 chunk 整节回填 LLM；标题路径进 chunk 正文提升检索对齐 |
-| chunkId 确定性生成 | `{docId}#p{n}c{m}`，同文档重跑产出相同 ID，与"先删后写"共同构成幂等语义 |
+| chunkId 确定性生成 | `sha256(docId#p{n}c{m})` 前 32 位十六进制。为什么不用可读拼接：Milvus 主键是 VARCHAR(36) 硬限制（Spring AI 建表即此约束），UUID+后缀必然超长导致插入被拒；哈希 ID 定长且同文档重跑同 ID |
 | 任务状态机落库 | 大文件不能阻塞 HTTP；任务表同时承担进度可见性与审计（策略/质量分/chunk 数） |
 | docId 由内容 hash 派生 | 同内容天然同 docId，判重与幂等键统一 |
 
@@ -105,10 +105,10 @@ curl http://localhost:8080/agent/ingest/metrics
 | `PdfFileValidatorTest` | magic bytes 伪装、大小限额、路径穿越消毒 |
 | `QualityScorerTest` | 分数区间、乱码降分、空文档低分、复核标记 |
 | `LayoutStructurerTest` | 页眉页脚剔除、表格聚合、标题层级、章节路径、前言章节 |
-| `LayoutAwareChunkerTest` | 父子结构、chunkId 确定性、表格整块保留、超长表格重复表头、长度约束 |
+| `LayoutAwareChunkerTest` | 父子结构、chunkId 确定性与 **≤36 字符约束（Milvus 主键）**、表格整块保留、超长表格重复表头、长度约束 |
 | `TextLayerPdfParserTest` | PDFBox 现场生成 PDF 端到端解析、字号保留、扫描件画像跳过 |
 | `IngestTaskRepositoryTest` | 真实 schema 建表、判重、错误截断、重试计数、文档级删除 |
-| `MilvusIngestWriterTest` | 批大小切分、400 参数错误快速失败、超时退避重试、429/5xx 可重试、瞬态恢复 |
+| `MilvusIngestWriterTest` | 批大小切分、400 参数错误快速失败、超时退避重试、429/5xx 可重试、瞬态恢复、**未知异常有界重试 + cause 链错误透出** |
 
 ## 八、已知限制与后续（P2+）
 

@@ -194,4 +194,22 @@ class MilvusIngestWriterTest {
 
         assertEquals(2, store.addCalls, "第一次失败后重试成功");
     }
+
+    @Test
+    @DisplayName("未知异常（如 Milvus 插入失败）默认有界重试，且错误信息透出完整 cause 链")
+    void retriesUnknownErrorAndReportsCauseChain() {
+        FakeVectorStore store = new FakeVectorStore();
+        // 复现真实事故形态：根因挂在 cause 上，外层消息为空
+        store.error = new RuntimeException("Failed to insert:",
+                new IllegalStateException("the length of field doc_id exceeds max length (36)"));
+        store.failFirstCalls = Integer.MAX_VALUE;
+        MilvusIngestWriter writer = new MilvusIngestWriter(store, properties(20, 2));
+
+        IngestWriteException ex = assertThrows(IngestWriteException.class,
+                () -> writer.replaceDocument("doc-1", "a.pdf", "sha", chunks(1)));
+
+        assertEquals(2, store.addCalls, "未知异常应有界重试");
+        assertTrue(ex.getMessage().contains("Failed to insert"), "错误信息应含外层消息");
+        assertTrue(ex.getMessage().contains("exceeds max length"), "错误信息应含根因消息（cause 链）");
+    }
 }

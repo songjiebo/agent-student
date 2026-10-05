@@ -6,9 +6,11 @@ import com.example.agent.ingestion.model.Chunk;
 import com.example.agent.ingestion.model.ChunkRole;
 import com.example.agent.ingestion.model.DocBlock;
 import com.example.agent.ingestion.model.DocSection;
+import com.example.agent.ingestion.util.Hashing;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
@@ -22,7 +24,8 @@ import java.util.regex.Pattern;
  *   <li>子 chunk（CHILD）小而准负责检索命中，父 chunk（PARENT）整节回填给 LLM，答案上下文完整；</li>
  *   <li>表格整块保留：表格跨 chunk 硬切会直接导致数字问答出错。</li>
  * </ul>
- * 切分只在句子边界断开；chunkId 确定性生成，同文档重复入库产出相同 ID（幂等前提）。
+ * 切分只在句子边界断开；chunkId 由内容派生的定长哈希生成（见 {@link #chunkIdOf}），
+ * 同文档重复入库产出相同 ID（幂等前提）。
  */
 @Component
 @RequiredArgsConstructor
@@ -55,7 +58,7 @@ public class LayoutAwareChunker {
             // 章节内容先按父粒度打包（超过 maxParentChars 的章节二次拆分）
             for (List<BlockText> parentGroup : pack(blocks, cfg.getMaxParentChars())) {
                 parentSeq++;
-                String parentChunkId = docId + "#p" + parentSeq + "c0";
+                String parentChunkId = chunkIdOf(docId, parentSeq, 0);
                 String parentBody = joinBlocks(parentGroup);
 
                 chunks.add(Chunk.builder()
@@ -74,7 +77,7 @@ public class LayoutAwareChunker {
                 for (List<BlockText> childGroup : pack(parentGroup, cfg.getMaxChildChars())) {
                     childSeq++;
                     chunks.add(Chunk.builder()
-                            .chunkId(parentChunkId + "c" + childSeq)
+                            .chunkId(chunkIdOf(docId, parentSeq, childSeq))
                             .parentChunkId(parentChunkId)
                             .role(ChunkRole.CHILD)
                             .text(withSectionPrefix(sectionPath, joinBlocks(childGroup)))
@@ -214,6 +217,24 @@ public class LayoutAwareChunker {
             return body;
         }
         return sectionPath + "\n\n" + body;
+    }
+
+    /**
+     * 确定性 chunkId 生成：SHA-256(docId#p{父序号}c{子序号}) 截取 32 位十六进制。
+     *
+     * <p>为什么不用可读的 "{docId}#p1c1" 拼接：Milvus 主键是 VARCHAR(36) 硬限制
+     * （Spring AI MilvusVectorStore 建表即此约束），UUID(36) + 后缀必然超长导致插入被拒。
+     * 哈希 ID 同时满足：定长 ≤36、确定性（同文档重跑同 ID，幂等前提）、碰撞概率可忽略。
+     *
+     * @param docId     文档 ID
+     * @param parentSeq 父序号（1 起）
+     * @param childSeq  子序号（父块为 0）
+     * @return 32 位十六进制 chunkId
+     */
+    private static String chunkIdOf(String docId, int parentSeq, int childSeq) {
+        return Hashing.sha256Hex((docId + "#p" + parentSeq + "c" + childSeq)
+                        .getBytes(StandardCharsets.UTF_8))
+                .substring(0, 32);
     }
 
     private int firstPage(List<BlockText> group) {
