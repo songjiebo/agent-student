@@ -7,6 +7,13 @@ server:
 spring:
   application:
     name: agent-student
+  servlet:
+    multipart:
+      # servlet 层"粗闸"，必须高于业务限制 agent.ingest.limits.max-file-bytes(50MB)：
+      # 若粗闸低于业务限制，PdfFileValidator 的"超限"分支永远不可达，
+      # 且超限请求会以空响应体的 413 返回，客户端无法区分原因
+      max-file-size: 51MB              # 文件硬顶 = 业务限制 50MB + 1MB 余量（413 兜底）
+      max-request-size: 53MB           # 请求体硬顶 = 文件上限 + multipart boundary/头部开销
   # ==================== H2 内存数据库（会话记忆持久化） ====================
   datasource:
     url: jdbc:h2:mem:agent_chat_memory;MODE=LEGACY;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE

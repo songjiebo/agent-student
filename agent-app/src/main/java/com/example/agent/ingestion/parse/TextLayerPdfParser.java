@@ -60,8 +60,7 @@ public class TextLayerPdfParser implements PdfParseStrategy {
     @Override
     public boolean supports(PdfProbeResult probe) {
         // 无文本层的文档（扫描件）不适用，直接跳到 OCR 策略
-        //return probe.hasTextLayer(properties.getQuality().getMinCharsPerPage());
-        return false;
+        return probe.hasTextLayer(properties.getQuality().getMinCharsPerPage());
     }
 
     @Override

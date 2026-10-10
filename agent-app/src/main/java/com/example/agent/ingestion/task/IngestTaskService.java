@@ -112,7 +112,8 @@ public class IngestTaskService {
         metrics.onSubmitted(bytes.length);
 
         // 异步执行：接口立即返回 taskId，进度通过查询接口获取
-        ingestExecutor.execute(() -> run(task.getTaskId()));
+        //ingestExecutor.execute(() -> run(task.getTaskId()));
+        run(task.getTaskId());
         return new UploadResult(task.getTaskId(), docId, task.getStatus().name(), false);
     }
 
